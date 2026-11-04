@@ -29,9 +29,17 @@ def list_days(path):
 
 def create_app(config_path=CONFIG_PATH):
     app = Flask(__name__, static_folder="static", static_url_path="/static")
-    categories = load_categories(config_path)
+    cache = {"mtime": None, "categories": {}}
+
+    def get_categories():
+        mtime = os.path.getmtime(config_path)
+        if mtime != cache["mtime"]:
+            cache["categories"] = load_categories(config_path)
+            cache["mtime"] = mtime
+        return cache["categories"]
 
     def get_category(cat):
+        categories = get_categories()
         if cat not in categories:
             abort(404)
         return categories[cat]
@@ -52,7 +60,7 @@ def create_app(config_path=CONFIG_PATH):
 
     @app.get("/api/categories")
     def api_categories():
-        return jsonify([{"id": key, "label": value["label"]} for key, value in categories.items()])
+        return jsonify([{"id": key, "label": value["label"]} for key, value in get_categories().items()])
 
     @app.get("/api/<cat>/days")
     def api_days(cat):

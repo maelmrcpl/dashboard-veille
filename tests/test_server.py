@@ -1,4 +1,5 @@
 import json
+import os
 
 import pytest
 
@@ -70,6 +71,15 @@ def test_category_root_redirects_home(client):
         response = client.get(url)
         assert response.status_code == 302
         assert response.headers["Location"] == "/"
+
+
+def test_config_reloaded_when_file_changes(client, tmp_path):
+    assert len(client.get("/api/categories").get_json()) == 3
+    config = {"categories": {"only": {"label": "Seule", "path": "demo"}}}
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps(config), encoding="utf-8")
+    os.utime(config_file, (1, 1_900_000_000))
+    assert [c["id"] for c in client.get("/api/categories").get_json()] == ["only"]
 
 
 def test_pages(client):
