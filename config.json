@@ -1,0 +1,20 @@
+{
+  "categories": {
+    "ia": {
+      "label": "Intelligence artificielle",
+      "path": "C:/Users/HTTN6172/Documents/veille-ia/data/ia"
+    },
+    "cyber": {
+      "label": "Cybersécurité",
+      "path": "data/cyber"
+    },
+    "reseau": {
+      "label": "Réseau",
+      "path": "data/reseau"
+    },
+    "cloud": {
+      "label": "Cloud / DevOps",
+      "path": "data/cloud"
+    }
+  }
+}

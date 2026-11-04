@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Veille</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="topbar"><div class="topbar-inner"><a class="brand" href="/">Veille</a><nav id="nav"></nav></div></div>
+  <main>
+    <section class="hero">
+      <h1>Votre veille du jour</h1>
+      <p><span class="date" id="date"></span><span class="sep">•</span><span class="count mono" id="count"></span></p>
+    </section>
+    <div class="tiles" id="tiles"></div>
+    <div class="layout">
+      <section>
+        <div class="section-title"><h2>À la une</h2><span class="mono">Le sujet n°1 de chaque catégorie</span></div>
+        <div class="feed" id="feed"></div>
+      </section>
+      <aside class="aside-card">
+        <h2>Sources du jour</h2>
+        <div class="chips mono" id="sources"></div>
+      </aside>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+  <script>loadOverview();</script>
+</body>
+</html>
