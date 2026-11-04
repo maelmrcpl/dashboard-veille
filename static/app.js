@@ -23,7 +23,111 @@ async function renderNav(activeId) {
     link.dataset.cat = c.id;
     nav.append(link);
   }
+  initBubble(nav);
+  renderFooter(categories);
   return categories;
+}
+
+function renderFooter(categories) {
+  const links = document.getElementById("footer-links");
+  links.append(el("a", { href: "/", textContent: "Accueil" }));
+  for (const c of categories) {
+    const link = el("a", { href: `/c/${c.id}`, textContent: c.label });
+    link.dataset.cat = c.id;
+    links.append(link);
+  }
+  document.getElementById("year").textContent = new Date().getFullYear();
+}
+
+function initBubble(nav) {
+  const DRAG_WIDTH = 120;
+  const links = [...nav.querySelectorAll("a")];
+  const active = nav.querySelector("a.active");
+  const bubble = el("div", { className: "nav-bubble" });
+  nav.append(bubble);
+
+  const setUnder = (link) => links.forEach((l) => l.classList.toggle("active", l === link));
+  const place = (link) => {
+    bubble.style.left = `${link.offsetLeft}px`;
+    bubble.style.top = `${link.offsetTop}px`;
+    bubble.style.width = `${link.offsetWidth}px`;
+    bubble.style.height = `${link.offsetHeight}px`;
+  };
+  const nearest = (center) =>
+    links.reduce((best, l) => (Math.abs(l.offsetLeft + l.offsetWidth / 2 - center) < Math.abs(best.offsetLeft + best.offsetWidth / 2 - center) ? l : best));
+
+  const previous = JSON.parse(sessionStorage.getItem("bubble") || "null");
+  if (previous) Object.assign(bubble.style, previous);
+  else place(active);
+  bubble.style.opacity = "1";
+  void bubble.offsetWidth;
+  bubble.classList.add("animate");
+  place(active);
+
+  window.addEventListener("pagehide", () => sessionStorage.setItem("bubble", JSON.stringify({
+    left: bubble.style.left, top: bubble.style.top, width: bubble.style.width, height: bubble.style.height,
+  })));
+  window.addEventListener("resize", () => { bubble.classList.remove("animate"); place(active); });
+
+  let drag = null;
+  active.addEventListener("dragstart", (e) => e.preventDefault());
+  active.addEventListener("click", (e) => { if (drag || active.dataset.dragged) e.preventDefault(); });
+  active.addEventListener("pointerdown", (e) => {
+    active.setPointerCapture(e.pointerId);
+    delete active.dataset.dragged;
+    const center = active.offsetLeft + active.offsetWidth / 2;
+    bubble.style.width = `${DRAG_WIDTH}px`;
+    bubble.style.left = `${center - DRAG_WIDTH / 2}px`;
+    drag = { x: e.clientX, left: center - DRAG_WIDTH / 2, target: active };
+    bubble.classList.add("dragging");
+  });
+  active.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (Math.abs(dx) > 3) active.dataset.dragged = "1";
+    const left = Math.min(Math.max(drag.left + dx, 0), nav.clientWidth - bubble.offsetWidth);
+    bubble.style.left = `${left}px`;
+    drag.target = nearest(left + bubble.offsetWidth / 2);
+    setUnder(drag.target);
+  });
+  const release = () => {
+    if (!drag) return;
+    const { target } = drag;
+    drag = null;
+    bubble.classList.remove("dragging");
+    if (target === active) place(active);
+    else setTimeout(() => { location.href = target.href; }, 200);
+  };
+  active.addEventListener("pointerup", release);
+  active.addEventListener("pointercancel", release);
+}
+
+const glow = el("div", { id: "cursor-glow" });
+document.body.append(glow);
+
+document.addEventListener("pointermove", (e) => {
+  const card = e.target.closest && e.target.closest(".tile, .card");
+  glow.style.transform = `translate(${e.clientX - 220}px, ${e.clientY - 220}px)`;
+  glow.classList.toggle("visible", !card);
+  if (!card) return;
+  const rect = card.getBoundingClientRect();
+  card.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+  card.style.setProperty("--my", `${e.clientY - rect.top}px`);
+  card.style.setProperty("--rx", `${-((e.clientY - rect.top) / rect.height - 0.5) * 10}deg`);
+  card.style.setProperty("--ry", `${((e.clientX - rect.left) / rect.width - 0.5) * 10}deg`);
+});
+
+document.addEventListener("pointerout", (e) => {
+  if (!e.relatedTarget) glow.classList.remove("visible");
+  const card = e.target.closest && e.target.closest(".tile, .card");
+  if (card && !card.contains(e.relatedTarget)) {
+    card.style.removeProperty("--rx");
+    card.style.removeProperty("--ry");
+  }
+});
+
+function stagger(container, selector, offset = 0) {
+  container.querySelectorAll(selector).forEach((node, i) => node.style.setProperty("--i", i + offset));
 }
 
 async function loadOverview() {
@@ -69,6 +173,8 @@ async function loadOverview() {
   if (latest) document.getElementById("date").textContent = formatDate(latest);
   document.getElementById("count").textContent = `${totalTopics} sujets analysés`;
   document.getElementById("sources").append(...[...sourceNames].sort().map((n) => el("span", { textContent: n })));
+  stagger(tiles, ".tile");
+  stagger(feed, ".card", categories.length);
 }
 
 function renderReport(container, report) {
@@ -91,6 +197,7 @@ function renderReport(container, report) {
       el("div", {}, body),
     ]));
   }
+  stagger(container, ".topic");
 }
 
 async function loadCategory() {
