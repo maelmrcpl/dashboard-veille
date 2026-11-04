@@ -6,15 +6,15 @@
     },
     "cyber": {
       "label": "Cybersécurité",
-      "path": "data/cyber"
+      "path": "C:/Users/HTTN6172/Documents/veille-ia/data/cyber"
     },
     "reseau": {
       "label": "Réseau",
-      "path": "data/reseau"
+      "path": "C:/Users/HTTN6172/Documents/veille-ia/data/reseau"
     },
     "cloud": {
       "label": "Cloud / DevOps",
-      "path": "data/cloud"
+      "path": "C:/Users/HTTN6172/Documents/veille-ia/data/cloud"
     }
   }
 }
