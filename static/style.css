@@ -25,6 +25,7 @@ body[data-cat] {
     var(--bg);
   background-repeat: no-repeat; }
 a { color: inherit; }
+::selection { background: color-mix(in srgb, var(--cat, var(--accent)) 35%, transparent); }
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 
 .topbar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 75%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); }
