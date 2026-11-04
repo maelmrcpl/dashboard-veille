@@ -65,6 +65,13 @@ def test_invalid_date(client):
     assert client.get("/api/demo/abc").status_code == 400
 
 
+def test_category_root_redirects_home(client):
+    for url in ("/c", "/c/"):
+        response = client.get(url)
+        assert response.status_code == 302
+        assert response.headers["Location"] == "/"
+
+
 def test_pages(client):
     assert client.get("/").status_code == 200
     assert client.get("/c/demo").status_code == 200

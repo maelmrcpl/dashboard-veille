@@ -2,7 +2,7 @@ import json
 import os
 import re
 
-from flask import Flask, abort, jsonify, send_from_directory
+from flask import Flask, abort, jsonify, redirect, send_from_directory
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
@@ -39,6 +39,11 @@ def create_app(config_path=CONFIG_PATH):
     @app.get("/")
     def overview():
         return send_from_directory("static", "index.html")
+
+    @app.get("/c")
+    @app.get("/c/")
+    def category_index():
+        return redirect("/")
 
     @app.get("/c/<cat>")
     def category_page(cat):
