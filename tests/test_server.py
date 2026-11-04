@@ -73,6 +73,52 @@ def test_category_root_redirects_home(client):
         assert response.headers["Location"] == "/"
 
 
+def test_audio_served_when_present(client, tmp_path):
+    (tmp_path / "demo" / "2026-11-03.wav").write_bytes(b"RIFFfakewav")
+    assert client.get("/api/demo/2026-11-03").get_json()["has_audio"] is True
+    response = client.get("/api/demo/2026-11-03/audio")
+    assert response.status_code == 200
+    assert response.mimetype == "audio/wav"
+    assert response.data == b"RIFFfakewav"
+
+
+def test_audio_range_request(client, tmp_path):
+    (tmp_path / "demo" / "2026-11-03.wav").write_bytes(b"0123456789")
+    response = client.get("/api/demo/2026-11-03/audio", headers={"Range": "bytes=2-5"})
+    assert response.status_code == 206
+    assert response.data == b"2345"
+
+
+def test_audio_absent(client):
+    assert client.get("/api/demo/2026-11-01").get_json()["has_audio"] is False
+    assert client.get("/api/demo/2026-11-01/audio").status_code == 404
+
+
+def test_audio_invalid_date_or_category(client):
+    assert client.get("/api/demo/abc/audio").status_code == 400
+    assert client.get("/api/nope/2026-11-01/audio").status_code == 404
+
+
+def test_global_audio_latest_and_file(tmp_path):
+    audio_dir = tmp_path / "global"
+    audio_dir.mkdir()
+    (audio_dir / "2026-11-02.wav").write_bytes(b"old")
+    (audio_dir / "2026-11-04.wav").write_bytes(b"newest")
+    (audio_dir / "notes.wav").write_bytes(b"x")
+    config = {"global_audio": "global", "categories": {"demo": {"label": "Demo", "path": "demo"}}}
+    (tmp_path / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    client = create_app(str(tmp_path / "config.json")).test_client()
+    assert client.get("/api/global-audio/latest").get_json() == {"date": "2026-11-04", "url": "/api/global-audio/2026-11-04"}
+    assert client.get("/api/global-audio/2026-11-04").data == b"newest"
+    assert client.get("/api/global-audio/2026-11-03").status_code == 404
+    assert client.get("/api/global-audio/abc").status_code == 400
+
+
+def test_global_audio_not_configured(client):
+    assert client.get("/api/global-audio/latest").get_json() is None
+    assert client.get("/api/global-audio/2026-11-03").status_code == 404
+
+
 def test_config_reloaded_when_file_changes(client, tmp_path):
     assert len(client.get("/api/categories").get_json()) == 3
     config = {"categories": {"only": {"label": "Seule", "path": "demo"}}}

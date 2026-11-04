@@ -2,7 +2,7 @@ import json
 import os
 import re
 
-from flask import Flask, abort, jsonify, redirect, send_from_directory
+from flask import Flask, abort, jsonify, redirect, send_file, send_from_directory
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
@@ -20,6 +20,14 @@ def load_categories(config_path=CONFIG_PATH):
     }
 
 
+def load_global_audio_dir(config_path=CONFIG_PATH):
+    with open(config_path, encoding="utf-8") as file:
+        path = json.load(file).get("global_audio")
+    if not path:
+        return None
+    return os.path.join(os.path.dirname(os.path.abspath(config_path)), path)
+
+
 def list_days(path):
     if not os.path.isdir(path):
         return []
@@ -27,14 +35,22 @@ def list_days(path):
     return sorted(days, reverse=True)[:MAX_DAYS]
 
 
+def latest_audio_day(path):
+    if not path or not os.path.isdir(path):
+        return None
+    days = [n[:-4] for n in os.listdir(path) if DATE_PATTERN.match(n[:-4]) and n.endswith(".wav")]
+    return max(days, default=None)
+
+
 def create_app(config_path=CONFIG_PATH):
     app = Flask(__name__, static_folder="static", static_url_path="/static")
-    cache = {"mtime": None, "categories": {}}
+    cache = {"mtime": None, "categories": {}, "global_dir": None}
 
     def get_categories():
         mtime = os.path.getmtime(config_path)
         if mtime != cache["mtime"]:
             cache["categories"] = load_categories(config_path)
+            cache["global_dir"] = load_global_audio_dir(config_path)
             cache["mtime"] = mtime
         return cache["categories"]
 
@@ -62,6 +78,24 @@ def create_app(config_path=CONFIG_PATH):
     def api_categories():
         return jsonify([{"id": key, "label": value["label"]} for key, value in get_categories().items()])
 
+    @app.get("/api/global-audio/latest")
+    def api_global_audio_latest():
+        get_categories()
+        day = latest_audio_day(cache["global_dir"])
+        if day is None:
+            return jsonify(None)
+        return jsonify({"date": day, "url": f"/api/global-audio/{day}"})
+
+    @app.get("/api/global-audio/<date>")
+    def api_global_audio(date):
+        get_categories()
+        if not DATE_PATTERN.match(date):
+            abort(400)
+        file_path = os.path.join(cache["global_dir"] or "", f"{date}.wav")
+        if not cache["global_dir"] or not os.path.isfile(file_path):
+            abort(404)
+        return send_file(file_path, mimetype="audio/wav", conditional=True)
+
     @app.get("/api/<cat>/days")
     def api_days(cat):
         return jsonify(list_days(get_category(cat)["path"]))
@@ -75,7 +109,19 @@ def create_app(config_path=CONFIG_PATH):
         if not os.path.isfile(file_path):
             abort(404)
         with open(file_path, encoding="utf-8") as file:
-            return jsonify(json.load(file))
+            report = json.load(file)
+        report["has_audio"] = os.path.isfile(os.path.join(path, f"{date}.wav"))
+        return jsonify(report)
+
+    @app.get("/api/<cat>/<date>/audio")
+    def api_audio(cat, date):
+        path = get_category(cat)["path"]
+        if not DATE_PATTERN.match(date):
+            abort(400)
+        file_path = os.path.join(path, f"{date}.wav")
+        if not os.path.isfile(file_path):
+            abort(404)
+        return send_file(file_path, mimetype="audio/wav", conditional=True)
 
     return app
 

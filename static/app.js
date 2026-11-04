@@ -175,10 +175,50 @@ async function loadOverview() {
   document.getElementById("sources").append(...[...sourceNames].sort().map((n) => el("span", { textContent: n })));
   stagger(tiles, ".tile");
   stagger(feed, ".card", categories.length);
+  const globalAudio = await getJson("/api/global-audio/latest");
+  if (globalAudio) {
+    document.getElementById("global-player").append(
+      renderPlayer(globalAudio.url, `Le journal du jour · ${formatDate(globalAudio.date, true)}`));
+  }
 }
 
-function renderReport(container, report) {
+let currentAudio = null;
+
+function formatTime(seconds) {
+  const total = Math.floor(seconds || 0);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function renderPlayer(src, title = "Écouter la veille") {
+  const audio = el("audio", { src, preload: "metadata" });
+  const button = el("button", { className: "play", textContent: "▶", ariaLabel: "Lecture" });
+  const seek = el("input", { type: "range", className: "seek", min: 0, max: 1000, value: 0 });
+  const time = el("span", { className: "time mono", textContent: "0:00 / –:––" });
+  const update = () => { time.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`; };
+
+  button.addEventListener("click", () => (audio.paused ? audio.play() : audio.pause()));
+  audio.addEventListener("play", () => { button.textContent = "❚❚"; });
+  audio.addEventListener("pause", () => { button.textContent = "▶"; });
+  audio.addEventListener("loadedmetadata", update);
+  audio.addEventListener("timeupdate", () => {
+    if (audio.duration) seek.value = (audio.currentTime / audio.duration) * 1000;
+    update();
+  });
+  seek.addEventListener("input", () => { if (audio.duration) audio.currentTime = (seek.value / 1000) * audio.duration; });
+  currentAudio = audio;
+
+  return el("div", { className: "player" }, [
+    button,
+    el("div", { className: "player-body" }, [el("strong", { textContent: title }), seek]),
+    time,
+  ]);
+}
+
+function renderReport(container, report, id) {
+  if (currentAudio) currentAudio.pause();
+  currentAudio = null;
   container.replaceChildren();
+  if (report.has_audio) container.append(renderPlayer(`/api/${id}/${report.date}/audio`));
   for (const t of report.topics) {
     const body = [
       el("h2", { textContent: t.title }),
@@ -214,7 +254,7 @@ async function loadCategory() {
   }
   const show = async (day, button) => {
     daysBox.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b === button));
-    renderReport(content, await getJson(`/api/${id}/${day}`));
+    renderReport(content, await getJson(`/api/${id}/${day}`), id);
   };
   days.forEach((day, i) => {
     const button = el("button", { textContent: formatDate(day, true) });
