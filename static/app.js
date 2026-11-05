@@ -102,13 +102,8 @@ function initBubble(nav) {
   active.addEventListener("pointercancel", release);
 }
 
-const glow = el("div", { id: "cursor-glow" });
-document.body.append(glow);
-
 document.addEventListener("pointermove", (e) => {
   const card = e.target.closest && e.target.closest(".tile, .card");
-  glow.style.transform = `translate(${e.clientX - 220}px, ${e.clientY - 220}px)`;
-  glow.classList.toggle("visible", !card);
   if (!card) return;
   const rect = card.getBoundingClientRect();
   card.style.setProperty("--mx", `${e.clientX - rect.left}px`);
@@ -118,7 +113,6 @@ document.addEventListener("pointermove", (e) => {
 });
 
 document.addEventListener("pointerout", (e) => {
-  if (!e.relatedTarget) glow.classList.remove("visible");
   const card = e.target.closest && e.target.closest(".tile, .card");
   if (card && !card.contains(e.relatedTarget)) {
     card.style.removeProperty("--rx");

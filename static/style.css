@@ -79,11 +79,6 @@ footer { border-top: 1px solid var(--border); background: color-mix(in srgb, var
 .tile, .card { box-shadow: 0 6px 22px color-mix(in srgb, var(--cat) 9%, transparent); }
 .tile:hover::before, .card:hover::before { opacity: .8; }
 .card:hover { transform: perspective(700px) translateY(-6px) rotateX(calc(var(--rx, 0deg) * .5)) rotateY(calc(var(--ry, 0deg) * .5)) scale(1.02); }
-
-#cursor-glow { position: fixed; top: 0; left: 0; z-index: -1; width: 440px; height: 440px; border-radius: 50%; pointer-events: none; opacity: 0;
-  background: radial-gradient(circle, color-mix(in srgb, var(--cat, var(--accent)) 11%, transparent), transparent 65%);
-  transition: opacity .35s, transform .12s ease-out; }
-#cursor-glow.visible { opacity: 1; }
 .tile, .card, .topic { animation: rise .4s cubic-bezier(.2, .9, .3, 1.2) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
 @keyframes rise { from { opacity: 0; transform: translateY(26px) scale(.95); } }
 .tile-top { display: flex; align-items: center; gap: .5rem; }
