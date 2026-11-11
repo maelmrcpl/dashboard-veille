@@ -131,3 +131,63 @@ def test_config_reloaded_when_file_changes(client, tmp_path):
 def test_pages(client):
     assert client.get("/").status_code == 200
     assert client.get("/c/demo").status_code == 200
+
+
+def write_topics(folder, date, *topics):
+    report = {"date": date, "category": "demo", "topics": [
+        {"rank": rank, "title": title, "text": text, "sources": [{"name": source, "title": "s", "url": "u"}]}
+        for rank, (title, text, source) in enumerate(topics, 1)
+    ]}
+    (folder / f"{date}.json").write_text(json.dumps(report), encoding="utf-8")
+
+
+@pytest.fixture
+def search(client, tmp_path):
+    long_text = "Début sans rapport. " * 20 + "Le correctif arrive enfin. " + "Suite sans rapport. " * 20
+    write_topics(tmp_path / "demo", "2026-11-01", ("Sécurité des réseaux", "Une faille critique", "Le Monde"))
+    write_topics(tmp_path / "demo", "2026-11-03",
+                 ("Kubernetes 2.0", long_text, "Blog officiel"),
+                 ("Réseau privé", "La 5G gagne les usines", "The Register"))
+    return lambda query: client.get("/api/search", query_string={"q": query}).get_json()
+
+
+def test_search_ignores_case_and_accents(search):
+    found = search("RESEAU")
+    assert found["total"] == 2
+    assert [(r["date"], r["rank"], r["category"]) for r in found["results"]] == [
+        ("2026-11-03", 2, "demo"), ("2026-11-01", 1, "demo")]
+    assert found["results"][0]["title"] == "Réseau privé"
+
+
+def test_search_looks_in_text_and_source_names(search):
+    assert [r["title"] for r in search("usines")["results"]] == ["Réseau privé"]
+    assert [r["title"] for r in search("le monde")["results"]] == ["Sécurité des réseaux"]
+
+
+def test_search_requires_every_word(search):
+    assert [r["title"] for r in search("faille reseaux")["results"]] == ["Sécurité des réseaux"]
+    assert search("faille kubernetes")["results"] == []
+
+
+def test_search_snippet_is_cut_around_the_match(search):
+    snippet = search("correctif")["results"][0]["snippet"]
+    assert "Le correctif arrive enfin." in snippet
+    assert snippet.startswith("… ") and snippet.endswith(" …")
+    assert len(snippet) < 200
+
+
+def test_search_too_short_or_empty(search, client):
+    assert search("a") == {"query": "a", "total": 0, "results": []}
+    assert client.get("/api/search").get_json()["results"] == []
+
+
+def test_search_skips_unreadable_days(search, tmp_path):
+    (tmp_path / "demo" / "2026-11-02.json").write_text("{not json", encoding="utf-8")
+    assert search("kubernetes")["total"] == 1
+
+
+def test_search_results_are_capped(client, tmp_path):
+    write_topics(tmp_path / "demo", "2026-11-03", *[(f"Sujet commun {i}", "x", "s") for i in range(60)])
+    found = client.get("/api/search", query_string={"q": "commun"}).get_json()
+    assert found["total"] == 60
+    assert len(found["results"]) == 50

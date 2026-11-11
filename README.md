@@ -33,10 +33,13 @@ Dashboard web local regroupant les veilles quotidiennes (IA, cybersécurité, r�
 Le serveur n'écoute que sur `127.0.0.1` : le dashboard n'est accessible que depuis ta machine.
 
 ### Pages
-- `/` : vue d'ensemble (dernier jour de chaque catégorie) et audio global du jour.
+- `/` : vue d'ensemble et audio global du jour. Pour chaque catégorie : le sujet n°1 du dernier rapport, les titres des deux suivants, et une mention « Rapport d'hier » / « Rapport d'il y a N jours » quand ce rapport n'est pas du jour. Les sources sont classées par nombre de citations.
 - `/c/<catégorie>` : sujets du jour, audio de la catégorie et rétrospective sur 14 jours (`?d=AAAA-MM-JJ` ouvre un jour précis). `/c/` renvoie vers l'accueil.
 
 Les deux adresses servent la même page (`static/index.html`) : la navigation se fait côté navigateur, sans rechargement.
+
+### Recherche
+Le bouton « Rechercher » de la barre du haut (ou la touche `/`, ou Ctrl+K) ouvre une palette par-dessus la page en cours. Les résultats suivent la frappe à partir de deux caractères ; ↑ ↓ pour les parcourir, Entrée pour ouvrir, Échap pour revenir à la page sans rien changer. La recherche porte sur les 14 jours d'archives de toutes les catégories (titre, texte et nom des sources), ignore la casse et les accents, et exige tous les mots saisis. Un résultat ouvre le jour concerné, positionné sur le bon sujet.
 
 ### Lecteur audio
 Un bouton « Écouter » lance l'audio dans un lecteur fixé en bas de l'écran. Comme la page n'est jamais rechargée, la lecture continue quand on change de catégorie ou de jour. Le lecteur propose −15 s / +30 s, la vitesse (1× à 2×) et un lien vers la page de l'audio en cours. Après un rechargement ou une fermeture d'onglet, il revient en pause à l'endroit où il s'était arrêté.
@@ -77,7 +80,7 @@ Exemple : une catégorie « Dev » d'identifiant `dev`.
    ```json
    "dev": {"label": "Dev", "path": "C:/chemin/vers/veille-ia/data/dev"}
    ```
-   Le nom apparaît alors dans la barre de navigation, le pied de page, une tuile de l'accueil et la page `/c/dev`, sans redémarrer.
+   Le nom apparaît alors dans la barre de navigation, le pied de page, une entrée de l'accueil et la page `/c/dev`, sans redémarrer.
 3. **Couleur (`static/style.css`)** : ajouter une ligne avec la couleur de la catégorie (thème clair, thème sombre), à côté des existantes.
    ```css
    [data-cat="dev"] { --cat: light-dark(#2f7d4f, #7fd6a0); }
@@ -85,7 +88,7 @@ Exemple : une catégorie « Dev » d'identifiant `dev`.
    Sans cette ligne, la catégorie fonctionne mais prend la couleur par défaut. Son identifiant sert aussi de graine au fond en courbes de niveau : chaque catégorie a son propre relief.
 4. **Données de test (facultatif)** : ajouter `"dev"` avec quelques sujets dans `SUBJECTS` de `scripts/make_fake_data.py`, puis relancer le script.
 
-Tant que le dossier de la catégorie n'existe pas ou ne contient aucun JSON, sa tuile affiche « Bientôt » et sa page « Aucune donnée pour le moment ».
+Tant que le dossier de la catégorie n'existe pas ou ne contient aucun JSON, son entrée sur l'accueil affiche « Bientôt » et sa page « Aucune donnée pour le moment ».
 
 ## Tests
 ```powershell
