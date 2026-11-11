@@ -6,7 +6,7 @@ Dashboard web local regroupant les veilles quotidiennes (IA, cybersécurité, r�
 
 ### Prérequis
 - Python 3 (testé avec 3.13) et `pip`.
-- Un navigateur récent (Edge, Chrome, Firefox ou Safari à jour) pour les dégradés et les effets.
+- Un navigateur récent (Edge, Chrome, Firefox ou Safari à jour) : l'interface utilise `light-dark()` et `color-mix()`.
 - Le dépôt `veille-ia` (l'agent), cloné sur la même machine, pour avoir de vraies données.
 
 ### Étapes
@@ -34,7 +34,12 @@ Le serveur n'écoute que sur `127.0.0.1` : le dashboard n'est accessible que dep
 
 ### Pages
 - `/` : vue d'ensemble (dernier jour de chaque catégorie) et audio global du jour.
-- `/c/<catégorie>` : sujets du jour, lecteur audio de la catégorie et rétrospective sur 14 jours. `/c/` renvoie vers l'accueil.
+- `/c/<catégorie>` : sujets du jour, audio de la catégorie et rétrospective sur 14 jours (`?d=AAAA-MM-JJ` ouvre un jour précis). `/c/` renvoie vers l'accueil.
+
+Les deux adresses servent la même page (`static/index.html`) : la navigation se fait côté navigateur, sans rechargement.
+
+### Lecteur audio
+Un bouton « Écouter » lance l'audio dans un lecteur fixé en bas de l'écran. Comme la page n'est jamais rechargée, la lecture continue quand on change de catégorie ou de jour. Le lecteur propose −15 s / +30 s, la vitesse (1× à 2×) et un lien vers la page de l'audio en cours. Après un rechargement ou une fermeture d'onglet, il revient en pause à l'endroit où il s'était arrêté.
 
 ## Configuration
 
@@ -73,11 +78,11 @@ Exemple : une catégorie « Dev » d'identifiant `dev`.
    "dev": {"label": "Dev", "path": "C:/chemin/vers/veille-ia/data/dev"}
    ```
    Le nom apparaît alors dans la barre de navigation, le pied de page, une tuile de l'accueil et la page `/c/dev`, sans redémarrer.
-3. **Couleur (`static/style.css`)** : ajouter une ligne avec les deux couleurs du dégradé de la catégorie, à côté des existantes.
+3. **Couleur (`static/style.css`)** : ajouter une ligne avec la couleur de la catégorie (thème clair, thème sombre), à côté des existantes.
    ```css
-   [data-cat="dev"] { --cat: #4ade80; --cat2: #22d3ee; }
+   [data-cat="dev"] { --cat: light-dark(#2f7d4f, #7fd6a0); }
    ```
-   Sans cette ligne, la catégorie fonctionne mais n'a pas de couleur propre (tuile, bulle, titres).
+   Sans cette ligne, la catégorie fonctionne mais prend la couleur par défaut. Son identifiant sert aussi de graine au fond en courbes de niveau : chaque catégorie a son propre relief.
 4. **Données de test (facultatif)** : ajouter `"dev"` avec quelques sujets dans `SUBJECTS` de `scripts/make_fake_data.py`, puis relancer le script.
 
 Tant que le dossier de la catégorie n'existe pas ou ne contient aucun JSON, sa tuile affiche « Bientôt » et sa page « Aucune donnée pour le moment ».
