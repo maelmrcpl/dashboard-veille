@@ -3,37 +3,29 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>Veille</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <div class="topbar"><div class="topbar-inner"><a class="brand" href="/">Veille</a><nav id="nav"></nav></div></div>
-  <main>
-    <section class="hero">
-      <h1>Votre veille du jour</h1>
-      <p><span class="date" id="date"></span><span class="sep">•</span><span class="count mono" id="count"></span></p>
-    </section>
-    <div id="global-player"></div>
-    <div class="tiles" id="tiles"></div>
-    <div class="layout">
-      <section>
-        <div class="section-title"><h2>À la une</h2><span class="mono">Le sujet n°1 de chaque catégorie</span></div>
-        <div class="feed" id="feed"></div>
-      </section>
-      <aside class="aside-card">
-        <h2>Sources du jour</h2>
-        <div class="chips mono" id="sources"></div>
-      </aside>
+  <canvas id="contours" aria-hidden="true"></canvas>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c5.2 0 9.5 3.6 9.5 9s-4 10-9.8 10S2.5 17.2 2.5 12 6.8 2.5 12 2.5z"/><path d="M12.3 6.5c3.2 0 5.7 2.1 5.7 5.3s-2.6 5.7-5.9 5.7-5.6-2.3-5.6-5.4 2.6-5.6 5.8-5.6z"/><path d="M12.4 10.3c1.2 0 2.1.8 2.1 1.9s-1 2-2.3 2-2.1-.9-2.1-2 1-1.9 2.3-1.9z"/></svg>
+        Veille
+      </a>
+      <nav id="nav" aria-label="Catégories"></nav>
     </div>
-  </main>
+  </header>
+  <main id="view"></main>
   <footer>
     <div class="footer-inner">
-      <span><strong>Veille</strong>Dashboard de veille personnel · © <span id="year"></span></span>
+      <span><strong>Veille</strong> Dashboard de veille personnel · © <span id="year"></span></span>
       <div class="footer-links" id="footer-links"></div>
     </div>
   </footer>
   <script src="/static/app.js"></script>
-  <script>loadOverview();</script>
 </body>
 </html>

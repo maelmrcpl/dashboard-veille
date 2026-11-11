@@ -71,8 +71,9 @@ def create_app(config_path=CONFIG_PATH):
 
     @app.get("/c/<cat>")
     def category_page(cat):
+        # Single-page app: same shell as the overview, the client router renders the category.
         get_category(cat)
-        return send_from_directory("static", "category.html")
+        return send_from_directory("static", "index.html")
 
     @app.get("/api/categories")
     def api_categories():
