@@ -382,11 +382,16 @@ function currentCategoryId() {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function currentNavId() {
+  const id = currentCategoryId();
+  return categories.some((c) => c.id === id) ? id : null;
+}
+
 async function route({ first = false, scroll = false } = {}) {
   const ticket = ++routeTicket;
   const id = currentCategoryId();
   const category = categories.find((c) => c.id === id) || null;
-  setActive(category ? id : null, !first);
+  setActive(currentNavId(), !first);
   const nodes = id ? await categoryPage(id, category) : await overviewPage();
   if (ticket !== routeTicket) return; // a newer navigation won
   if (category) document.body.dataset.cat = id;
@@ -396,11 +401,18 @@ async function route({ first = false, scroll = false } = {}) {
   view.replaceChildren(...nodes);
   contours.set(category ? id : "accueil");
   player.sync();
-  if (scroll) window.scrollTo(0, 0);
+  // A search result links to one topic of a day: bring it into view and mark it.
+  const target = location.hash ? document.getElementById(location.hash.slice(1)) : null;
+  if (target) {
+    target.classList.add("hit");
+    target.scrollIntoView();
+  } else if (scroll) {
+    window.scrollTo(0, 0);
+  }
 }
 
 function navigate(url) {
-  if (url !== location.pathname + location.search) history.pushState(null, "", url);
+  if (url !== location.pathname + location.search + location.hash) history.pushState(null, "", url);
   route({ scroll: true });
 }
 
@@ -410,12 +422,159 @@ document.addEventListener("click", (event) => {
   if (!link || link.target || link.origin !== location.origin) return;
   if (link.pathname !== "/" && !link.pathname.startsWith("/c/")) return;
   event.preventDefault();
-  navigate(link.pathname + link.search);
+  navigate(link.pathname + link.search + link.hash);
 });
 window.addEventListener("popstate", () => route());
-window.addEventListener("resize", () => setActive(currentCategoryId(), false));
+window.addEventListener("resize", () => setActive(currentNavId(), false));
 
 /* ---------- Pages ---------- */
+
+const MORE_TOPICS = 2; // titles listed under each category's lead topic on the overview
+const MAX_SOURCES = 10; // rows in the overview's source ranking
+
+function daysAgo(iso) {
+  const now = new Date();
+  const [year, month, day] = iso.split("-").map(Number);
+  return Math.round((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - Date.UTC(year, month - 1, day)) / 86400000);
+}
+
+// Lower-cases and strips accents one character at a time, so offsets in the result match the original text.
+// Must stay in step with fold() in server.py, which decides what matches.
+function fold(text) {
+  return text.replace(/[\s\S]/g, (char) => {
+    const base = char.normalize("NFD")[0].toLowerCase();
+    return base.length === 1 ? base : char;
+  });
+}
+
+// Splits `text` into strings and <mark> elements around every occurrence of the search terms.
+function highlighted(text, terms) {
+  const folded = fold(text);
+  const ranges = [];
+  for (const term of terms) {
+    for (let at = folded.indexOf(term); at !== -1; at = folded.indexOf(term, at + term.length)) ranges.push([at, at + term.length]);
+  }
+  ranges.sort((a, b) => a[0] - b[0]);
+  const nodes = [];
+  let cursor = 0;
+  for (const [start, end] of ranges) {
+    if (start < cursor) continue; // overlaps the previous match
+    nodes.push(text.slice(cursor, start), el("mark", { textContent: text.slice(start, end) }));
+    cursor = end;
+  }
+  nodes.push(text.slice(cursor));
+  return nodes;
+}
+
+/* Search palette: an overlay on top of the current page. Results follow the typing; picking one
+   navigates to its topic, Escape closes and leaves the page as it was. */
+const palette = (() => {
+  const MIN_QUERY = 2; // same minimum as the server
+  const HINT = "Titres, textes et sources des 14 derniers jours";
+  const dialog = document.getElementById("palette");
+  const input = document.getElementById("palette-input");
+  const list = document.getElementById("palette-results");
+  const status = document.getElementById("palette-status");
+  let active = -1;
+  let timer = 0;
+  let ticket = 0;
+
+  function setActive(index, reveal = true) {
+    const items = list.querySelectorAll(".palette-item");
+    active = items.length ? (index + items.length) % items.length : -1;
+    items.forEach((item, i) => {
+      item.classList.toggle("active", i === active);
+      item.setAttribute("aria-selected", String(i === active));
+    });
+    if (active >= 0) {
+      input.setAttribute("aria-activedescendant", items[active].id);
+      if (reveal) items[active].scrollIntoView({ block: "nearest" });
+    } else {
+      input.removeAttribute("aria-activedescendant");
+    }
+  }
+
+  function message(text) {
+    list.replaceChildren(el("p", { className: "palette-empty", textContent: text }));
+    setActive(-1);
+  }
+
+  async function search() {
+    const mine = ++ticket;
+    const query = input.value.trim();
+    if (query.length < MIN_QUERY) {
+      list.replaceChildren();
+      setActive(-1);
+      status.textContent = HINT;
+      return;
+    }
+    const data = await getJson(`/api/search?q=${encodeURIComponent(query)}`);
+    if (mine !== ticket) return; // a newer keystroke won
+    if (!data) {
+      status.textContent = HINT;
+      return message("La recherche a échoué.");
+    }
+    if (!data.results.length) {
+      status.textContent = "Aucun résultat";
+      return message(`Aucun sujet ne correspond à « ${query} ».`);
+    }
+    const terms = fold(query).split(/\s+/).filter(Boolean);
+    list.replaceChildren(...data.results.map((result, i) => {
+      const category = categories.find((c) => c.id === result.category);
+      const item = el("a", { className: "palette-item", id: `resultat-${i}`, role: "option", href: `/c/${result.category}?d=${result.date}#sujet-${result.rank}` }, [
+        el("span", { className: "palette-meta" }, [
+          el("span", { className: "label", textContent: category ? category.label : result.category }),
+          el("span", { textContent: formatDate(result.date, true) }),
+        ]),
+        el("strong", {}, highlighted(result.title, terms)),
+        el("span", { className: "palette-snippet" }, highlighted(result.snippet, terms)),
+      ]);
+      item.dataset.cat = result.category;
+      item.addEventListener("pointermove", () => { if (active !== i) setActive(i, false); });
+      return item;
+    }));
+    list.scrollTop = 0;
+    setActive(0);
+    status.textContent = data.total > data.results.length
+      ? `${count(data.total, "résultat")} · les ${data.results.length} plus récents affichés`
+      : count(data.total, "résultat");
+  }
+
+  function open() {
+    if (dialog.open) return;
+    dialog.showModal();
+    input.select(); // the previous query stays, ready to be reused or typed over
+  }
+
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(search, 150);
+  });
+  input.addEventListener("keydown", (event) => {
+    const items = list.querySelectorAll(".palette-item");
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (items.length) setActive(active + (event.key === "ArrowDown" ? 1 : -1));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (active >= 0) items[active].click();
+    }
+  });
+  // Picking a result closes the palette; the document's link handler then does the navigation.
+  list.addEventListener("click", (event) => { if (event.target.closest(".palette-item")) dialog.close(); });
+  dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); }); // click on the backdrop
+  document.getElementById("search-open").addEventListener("click", open);
+  document.addEventListener("keydown", (event) => {
+    const shortcut = (event.key === "k" && (event.ctrlKey || event.metaKey))
+      || (event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName));
+    if (!shortcut) return;
+    event.preventDefault();
+    open();
+  });
+  status.textContent = HINT;
+
+  return { open };
+})();
 
 async function overviewPage() {
   const [reports, journal] = await Promise.all([
@@ -428,14 +587,18 @@ async function overviewPage() {
   const live = reports.filter(Boolean);
   const latest = live.reduce((max, r) => (r.date > max ? r.date : max), "");
   const topicCount = live.reduce((n, r) => n + r.topics.length, 0);
-  const sourceNames = [...new Set(live.flatMap((r) => r.topics.flatMap((t) => t.sources.map((s) => s.name))))]
-    .sort((a, b) => a.localeCompare(b, "fr"));
+  // Sources ranked by how many of today's topics cite them.
+  const citations = new Map();
+  for (const name of live.flatMap((r) => r.topics.flatMap((t) => t.sources.map((s) => s.name)))) {
+    citations.set(name, (citations.get(name) || 0) + 1);
+  }
+  const sources = [...citations].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "fr"));
 
   const hero = el("section", { className: "hero" }, [
     el("p", { className: "eyebrow" }, [
       el("span", { textContent: latest ? formatDate(latest) : "En attente de données" }),
       el("span", { className: "mark", textContent: count(topicCount, "sujet") }),
-      el("span", { textContent: count(sourceNames.length, "source") }),
+      el("span", { textContent: count(sources.length, "source") }),
     ]),
     el("h1", { textContent: "Votre veille du jour" }),
   ]);
@@ -444,54 +607,60 @@ async function overviewPage() {
     hero.append(listenButton(track, "Le journal du jour", `Écouter · ${formatDate(journal.date, true)}`));
   }
 
-  const tiles = el("div", { className: "tiles" });
+  // One entry per category: its lead topic in full, then the titles of the next ones.
   const feed = el("div", { className: "feed" });
   categories.forEach((c, i) => {
     const report = reports[i];
-    const top = report && report.topics[0];
-    const tile = el("a", { className: "tile", href: `/c/${c.id}` }, [
+    const [top, ...others] = report ? report.topics : [];
+    const rank = (topic) => el("span", { className: "index", textContent: String(topic.rank).padStart(2, "0") });
+    const body = top
+      ? [el("div", { className: "entry-lead" }, [rank(top), el("div", {}, [el("h3", { textContent: top.title }), el("p", { textContent: top.text })])])]
+      : [el("p", { className: "empty", textContent: "Pas encore de données." })];
+    if (others.length) {
+      body.push(el("ol", { className: "entry-more" }, others.slice(0, MORE_TOPICS).map((topic) => el("li", {}, [rank(topic), topic.title]))));
+    }
+    const side = el("div", { className: "entry-side" }, [
       el("span", { className: "label", textContent: c.label }),
-      el("span", { className: top ? "tile-headline" : "tile-headline none", textContent: top ? top.title : "Pas encore de données" }),
-      el("span", { className: "tile-foot" }, [
-        el("span", { textContent: report ? count(report.topics.length, "sujet") : "Bientôt" }),
+      el("span", { className: "entry-count" }, [
+        report ? count(report.topics.length, "sujet") : "Bientôt",
         el("span", { className: "arrow", textContent: "→" }),
       ]),
     ]);
-    tile.dataset.cat = c.id;
-    tiles.append(tile);
-    if (!top) return;
-    const entry = el("a", { className: "entry", href: `/c/${c.id}` }, [
-      el("span", { className: "index", textContent: String(feed.children.length + 1).padStart(2, "0") }),
-      el("div", {}, [
-        el("div", { className: "label" }, [el("b", { textContent: c.label }), count(top.sources.length, "source")]),
-        el("h3", { textContent: top.title }),
-        el("p", { textContent: top.text }),
-      ]),
-    ]);
+    // Say so when the latest report is not today's (the agent has not run, or failed, for this category).
+    const age = report ? daysAgo(report.date) : 0;
+    if (age > 0) side.append(el("span", { className: "entry-stale", textContent: age === 1 ? "Rapport d'hier" : `Rapport d'il y a ${age} jours` }));
+    const entry = el("a", { className: "entry", href: `/c/${c.id}` }, [side, el("div", {}, body)]);
     entry.dataset.cat = c.id;
     feed.append(entry);
   });
-  if (!feed.children.length) feed.append(el("p", { className: "empty", textContent: "Aucun sujet pour le moment." }));
 
   const layout = el("div", { className: "layout" }, [
     el("section", {}, [
       el("div", { className: "section-title" }, [
         el("h2", { textContent: "À la une" }),
-        el("span", { textContent: "Le sujet n°1 de chaque catégorie" }),
+        el("span", { textContent: "Par catégorie" }),
       ]),
       feed,
     ]),
   ]);
-  if (sourceNames.length) {
+  if (sources.length) {
+    const rows = sources.slice(0, MAX_SOURCES).map(([name, cited]) => {
+      const row = el("li", {}, [name, el("b", { textContent: String(cited) })]);
+      row.style.setProperty("--share", cited / sources[0][1]);
+      return row;
+    });
+    if (sources.length > MAX_SOURCES) {
+      rows.push(el("li", { className: "more", textContent: `+ ${count(sources.length - MAX_SOURCES, "autre")}` }));
+    }
     layout.append(el("aside", {}, [
       el("div", { className: "section-title" }, [
         el("h2", { textContent: "Sources du jour" }),
-        el("span", { textContent: String(sourceNames.length) }),
+        el("span", { textContent: "Citations" }),
       ]),
-      el("ul", { className: "sources" }, sourceNames.map((name) => el("li", { textContent: name }))),
+      el("ul", { className: "sources" }, rows),
     ]));
   }
-  return [hero, tiles, layout];
+  return [hero, layout];
 }
 
 function reportNodes(report, category) {
@@ -515,7 +684,7 @@ function reportNodes(report, category) {
           el("li", {}, [el("a", { href: s.url, target: "_blank", rel: "noopener", textContent: s.title }), ` · ${s.name}`]))),
       ]));
     }
-    const article = el("article", { className: "topic" }, [
+    const article = el("article", { className: "topic", id: `sujet-${topic.rank}` }, [
       el("div", { className: "index", textContent: String(topic.rank).padStart(2, "0") }),
       el("div", {}, body),
     ]);

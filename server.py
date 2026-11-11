@@ -1,13 +1,17 @@
 import json
 import os
 import re
+import unicodedata
 
-from flask import Flask, abort, jsonify, redirect, send_file, send_from_directory
+from flask import Flask, abort, jsonify, redirect, request, send_file, send_from_directory
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MAX_DAYS = 14
+MIN_QUERY = 2
+MAX_RESULTS = 50
+SNIPPET_WIDTH = 180
 
 
 def load_categories(config_path=CONFIG_PATH):
@@ -42,6 +46,58 @@ def latest_audio_day(path):
     return max(days, default=None)
 
 
+def fold(text):
+    """Lower-case and strip accents, one character in for one out, so offsets stay valid in the original.
+
+    static/app.js has the same function to highlight matches: keep the two in step.
+    """
+    folded = []
+    for char in text:
+        base = unicodedata.normalize("NFD", char)[0].lower()
+        folded.append(base if len(base) == 1 else char)
+    return "".join(folded)
+
+
+def make_snippet(text, folded, terms):
+    """Cut `text` to about SNIPPET_WIDTH characters around the first search term found in it."""
+    found = [position for position in (folded.find(term) for term in terms) if position >= 0]
+    first = min(found, default=0)
+    start = max(0, first - SNIPPET_WIDTH // 3)
+    if start:
+        space = text.find(" ", start, first)
+        start = space + 1 if space >= 0 else start
+    end = min(len(text), start + SNIPPET_WIDTH)
+    if end < len(text):
+        space = text.rfind(" ", first, end)
+        end = space if space > first else end
+    return ("… " if start else "") + text[start:end].strip() + (" …" if end < len(text) else "")
+
+
+def search_topics(categories, query):
+    """Topics of the listed days whose title, text or source names contain every word of `query`, newest first."""
+    terms = fold(query).split()
+    results = []
+    for cat_id, category in categories.items():
+        for day in list_days(category["path"]):
+            try:
+                with open(os.path.join(category["path"], f"{day}.json"), encoding="utf-8") as file:
+                    topics = json.load(file)["topics"]
+            except (OSError, ValueError, KeyError, TypeError):
+                continue  # one unreadable day must not break the whole search
+            for topic in topics:
+                title, text = topic.get("title", ""), topic.get("text", "")
+                names = " ".join(source.get("name", "") for source in topic.get("sources", []))
+                folded_text = fold(text)
+                haystack = "\n".join((fold(title), folded_text, fold(names)))
+                if all(term in haystack for term in terms):
+                    results.append({
+                        "category": cat_id, "date": day, "rank": topic.get("rank"),
+                        "title": title, "snippet": make_snippet(text, folded_text, terms),
+                    })
+    results.sort(key=lambda result: result["date"], reverse=True)  # stable: config order, then rank, within a day
+    return results
+
+
 def create_app(config_path=CONFIG_PATH):
     app = Flask(__name__, static_folder="static", static_url_path="/static")
     cache = {"mtime": None, "categories": {}, "global_dir": None}
@@ -74,6 +130,12 @@ def create_app(config_path=CONFIG_PATH):
         # Single-page app: same shell as the overview, the client router renders the category.
         get_category(cat)
         return send_from_directory("static", "index.html")
+
+    @app.get("/api/search")
+    def api_search():
+        query = request.args.get("q", "").strip()
+        results = search_topics(get_categories(), query) if len(query) >= MIN_QUERY else []
+        return jsonify({"query": query, "total": len(results), "results": results[:MAX_RESULTS]})
 
     @app.get("/api/categories")
     def api_categories():

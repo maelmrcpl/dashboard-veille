@@ -17,6 +17,11 @@
         Veille
       </a>
       <nav id="nav" aria-label="Catégories"></nav>
+      <button class="search-open" id="search-open" type="button" aria-haspopup="dialog" aria-label="Rechercher dans les archives">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <span>Rechercher</span>
+        <kbd>/</kbd>
+      </button>
     </div>
   </header>
   <main id="view"></main>
@@ -26,6 +31,18 @@
       <div class="footer-links" id="footer-links"></div>
     </div>
   </footer>
+  <dialog class="palette" id="palette" aria-label="Rechercher dans les archives">
+    <div class="palette-field">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+      <input id="palette-input" type="text" role="combobox" aria-expanded="true" aria-controls="palette-results" aria-label="Rechercher" placeholder="Rechercher un sujet, une source…" autocomplete="off" spellcheck="false">
+      <kbd>Échap</kbd>
+    </div>
+    <div class="palette-results" id="palette-results" role="listbox" aria-label="Résultats"></div>
+    <div class="palette-foot">
+      <span id="palette-status" aria-live="polite"></span>
+      <span class="palette-keys"><kbd>↑</kbd><kbd>↓</kbd> parcourir <kbd>↵</kbd> ouvrir</span>
+    </div>
+  </dialog>
   <script src="/static/app.js"></script>
 </body>
 </html>
